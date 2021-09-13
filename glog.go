@@ -8,10 +8,12 @@
 package glog
 
 import (
+	"bufio"
 	"fmt"
 	rotatelogs "github.com/lestrrat/go-file-rotatelogs"
 	"github.com/rifflock/lfshook"
 	"github.com/sirupsen/logrus"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -22,9 +24,7 @@ type MineFormatter struct{}
 const TimeFormat = "2006-01-02 15:04:05"
 
 func (s *MineFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-
 	msg := fmt.Sprintf("[%s] [%s] %s\n", time.Now().Local().Format(TimeFormat), strings.ToUpper(entry.Level.String()), entry.Message)
-
 	return []byte(msg), nil
 }
 
@@ -46,6 +46,13 @@ func writer(logPath string, level string, save uint) *rotatelogs.RotateLogs {
 
 func NewLogger(logPath string, app string, save uint) *logrus.Logger {
 	var log = logrus.New()
+	src, err := os.OpenFile(os.DevNull, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		fmt.Println("os.OpenFile", err)
+	}
+	output := bufio.NewWriter(src)
+	log.SetOutput(output)
+
 	logPath = path.Join(logPath, app)
 	lfHook := lfshook.NewHook(lfshook.WriterMap{
 		logrus.DebugLevel: writer(logPath, "debug", save), // 为不同级别设置不同的输出目的
