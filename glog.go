@@ -10,9 +10,10 @@ package glog
 import (
 	"bufio"
 	"fmt"
-	rotatelogs "github.com/lestrrat/go-file-rotatelogs"
+	"github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
 	"github.com/sirupsen/logrus"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -21,47 +22,43 @@ import (
 
 type MineFormatter struct{}
 
-const TimeFormat = "2006-01-02 15:04:05"
-
 func (s *MineFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	msg := fmt.Sprintf("[%s] [%s] %s\n", time.Now().Local().Format(TimeFormat), strings.ToUpper(entry.Level.String()), entry.Message)
+	msg := fmt.Sprintf("[%s] [%s] %s\n", time.Now().Local().Format("2006-01-02 15:04:05"), strings.ToUpper(entry.Level.String()), entry.Message)
 	return []byte(msg), nil
 }
 
-func writer(logPath string, level string, save uint) *rotatelogs.RotateLogs {
-	var cstSh, _ = time.LoadLocation("Asia/Shanghai") //上海
-	fileSuffix := time.Now().In(cstSh).Format("2006-01-02") + ".log"
+func write(baseLogPath string, level string, maxAge time.Duration, rotationTime time.Duration) *rotatelogs.RotateLogs {
 	logier, err := rotatelogs.New(
-		logPath+"_"+level+"-"+fileSuffix,
-		rotatelogs.WithLinkName(logPath+"_"+level), // 生成软链，指向最新日志文件
-		rotatelogs.WithRotationCount(int(save)),    // 文件最大保存份数
-		rotatelogs.WithRotationTime(time.Hour*24),  // 日志切割时间间隔
+		baseLogPath+"_"+level+"_%Y-%m-%d.log",
+		rotatelogs.WithLinkName(baseLogPath+"_"+level), // 生成软链，指向最新日志文件
+		rotatelogs.WithMaxAge(maxAge),                  // 文件最大保存时间
+		rotatelogs.WithRotationTime(rotationTime),      // 日志切割时间间隔
 	)
 
 	if err != nil {
-		panic(err)
+		log.Fatalf("config local file system logger error. %s", err.Error())
 	}
 	return logier
 }
 
-func NewLogger(logPath string, app string, save uint) *logrus.Logger {
-	var log = logrus.New()
-	src, err := os.OpenFile(os.DevNull, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-	if err != nil {
-		fmt.Println("os.OpenFile", err)
-	}
+// NewLogger logPath 日志目录, logFileName 日志文件名, maxAge 文件最大保存时间, rotationTime 日志切割时间间隔
+func NewLogger(logPath string, logFileName string, maxAge time.Duration, rotationTime time.Duration) *logrus.Logger {
+	fullLogPath := path.Join(logPath, logFileName)
+	src, _ := os.OpenFile(os.DevNull, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	output := bufio.NewWriter(src)
-	log.SetOutput(output)
 
-	logPath = path.Join(logPath, app)
+	l := logrus.New()
+	l.SetOutput(output)
+
 	lfHook := lfshook.NewHook(lfshook.WriterMap{
-		logrus.DebugLevel: writer(logPath, "debug", save), // 为不同级别设置不同的输出目的
-		logrus.InfoLevel:  writer(logPath, "info", save),
-		logrus.WarnLevel:  writer(logPath, "warn", save),
-		logrus.ErrorLevel: writer(logPath, "error", save),
-		logrus.FatalLevel: writer(logPath, "fatal", save),
-		logrus.PanicLevel: writer(logPath, "panic", save),
+		logrus.DebugLevel: write(fullLogPath, "debug", maxAge, rotationTime), // 为不同级别设置不同的输出目的
+		logrus.InfoLevel:  write(fullLogPath, "info", maxAge, rotationTime),
+		logrus.WarnLevel:  write(fullLogPath, "warn", maxAge, rotationTime),
+		logrus.ErrorLevel: write(fullLogPath, "error", maxAge, rotationTime),
+		logrus.FatalLevel: write(fullLogPath, "fatal", maxAge, rotationTime),
+		logrus.PanicLevel: write(fullLogPath, "panic", maxAge, rotationTime),
 	}, &MineFormatter{})
-	log.AddHook(lfHook)
-	return log
+
+	l.AddHook(lfHook)
+	return l
 }
