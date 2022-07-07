@@ -27,9 +27,9 @@ func (s *MineFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(msg), nil
 }
 
-func write(baseLogPath string, level string, maxAge time.Duration, rotationTime time.Duration) *rotatelogs.RotateLogs {
+func write(baseLogPath string, level string, suffix string, maxAge time.Duration, rotationTime time.Duration) *rotatelogs.RotateLogs {
 	logier, err := rotatelogs.New(
-		baseLogPath+"_"+level+"_%Y-%m-%d.log",
+		baseLogPath+"_"+level+suffix,
 		rotatelogs.WithLinkName(baseLogPath+"_"+level), // 生成软链，指向最新日志文件
 		rotatelogs.WithMaxAge(maxAge),                  // 文件最大保存时间
 		rotatelogs.WithRotationTime(rotationTime),      // 日志切割时间间隔
@@ -42,7 +42,7 @@ func write(baseLogPath string, level string, maxAge time.Duration, rotationTime 
 }
 
 // NewLogger logPath 日志目录, logFileName 日志文件名, maxAge 文件最大保存时间, rotationTime 日志切割时间间隔
-func NewLogger(logPath string, logFileName string, maxAge time.Duration, rotationTime time.Duration) *logrus.Logger {
+func NewLogger(logPath string, logFileName string, suffix string, maxAge time.Duration, rotationTime time.Duration) *logrus.Logger {
 	fullLogPath := path.Join(logPath, logFileName)
 	src, _ := os.OpenFile(os.DevNull, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	output := bufio.NewWriter(src)
@@ -51,12 +51,12 @@ func NewLogger(logPath string, logFileName string, maxAge time.Duration, rotatio
 	l.SetOutput(output)
 
 	lfHook := lfshook.NewHook(lfshook.WriterMap{
-		logrus.DebugLevel: write(fullLogPath, "debug", maxAge, rotationTime), // 为不同级别设置不同的输出目的
-		logrus.InfoLevel:  write(fullLogPath, "info", maxAge, rotationTime),
-		logrus.WarnLevel:  write(fullLogPath, "warn", maxAge, rotationTime),
-		logrus.ErrorLevel: write(fullLogPath, "error", maxAge, rotationTime),
-		logrus.FatalLevel: write(fullLogPath, "fatal", maxAge, rotationTime),
-		logrus.PanicLevel: write(fullLogPath, "panic", maxAge, rotationTime),
+		logrus.DebugLevel: write(fullLogPath, "debug", suffix, maxAge, rotationTime), // 为不同级别设置不同的输出目的
+		logrus.InfoLevel:  write(fullLogPath, "info", suffix, maxAge, rotationTime),
+		logrus.WarnLevel:  write(fullLogPath, "warn", suffix, maxAge, rotationTime),
+		logrus.ErrorLevel: write(fullLogPath, "error", suffix, maxAge, rotationTime),
+		logrus.FatalLevel: write(fullLogPath, "fatal", suffix, maxAge, rotationTime),
+		logrus.PanicLevel: write(fullLogPath, "panic", suffix, maxAge, rotationTime),
 	}, &MineFormatter{})
 
 	l.AddHook(lfHook)
